@@ -1,0 +1,40 @@
+{
+  "name": "aci-groq-mcp-gitops",
+  "version": "1.0.0",
+  "description": "ChatOps to GitOps — Sub-Second Cisco ACI Policy Auditing & Remediation with Groq + MCP",
+  "private": true,
+  "scripts": {
+    "dev": "next dev -p 3300",
+    "build": "next build",
+    "start": "next start -p 3300",
+    "mcp:stdio": "tsx src/mcp/stdio.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.7.0",
+    "clsx": "^2.1.1",
+    "diff": "^7.0.0",
+    "dotenv": "^16.4.7",
+    "echarts": "^5.6.0",
+    "groq-sdk": "^0.15.0",
+    "lucide-react": "^0.475.0",
+    "next": "15.1.7",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tailwind-merge": "^3.0.1",
+    "zod": "^3.24.2"
+  },
+  "devDependencies": {
+    "@types/diff": "^7.0.0",
+    "@types/node": "^22.13.4",
+    "@types/react": "^19.0.8",
+    "@types/react-dom": "^19.0.3",
+    "autoprefixer": "^10.4.20",
+    "postcss": "^8.5.2",
+    "tailwindcss": "^3.4.17",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.5"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "metadata": {
+    "generator": "aci-groq-mcp-gitops",
+    "timestamp": "2026-11-23T16:45:44.033Z",
+    "tenant": "Prod-CoreFin",
+    "reason": "Strip vzAny Any-to-Any binding from Prod-Payment-VRF and scope to stateful HTTPS/443"
+  },
+  "vrf": {
+    "name": "Prod-Payment-VRF",
+    "pc_enf_pref": "enforced",
+    "vz_any_enabled": false
+  },
+  "contract": {
+    "name": "Permit-All-AnyToAny",
+    "tenant": "Prod-CoreFin",
+    "scope": "context",
+    "consumer_epg": "Web-Frontend-EPG",
+    "provider_epg": "Payment-App-EPG",
+    "subjects": [
+      "Subj-Permit-All-AnyToAny-Restricted"
+    ]
+  },
+  "filter": {
+    "name": "Flt-Permit-All-AnyToAny-ZeroTrust",
+    "entries": [
+      {
+        "name": "https-443",
+        "ether_t": "ip",
+        "prot": "tcp",
+        "d_from_port": "443",
+        "d_to_port": "443",
+        "stateful": true
+      }
+    ]
+  }
+}

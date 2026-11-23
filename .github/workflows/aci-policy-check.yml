@@ -1,0 +1,53 @@
+name: Cisco ACI GitOps Guardrail (Terraform + OPA Policy Check)
+
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - "policies/**"
+  push:
+    branches:
+      - main
+
+jobs:
+  aci-policy-guardrail:
+    name: Validate Terraform & Enforce OPA Zero-Trust Guardrails
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install Dependencies & Run Policy Audit Unit Tests
+        run: |
+          npm ci
+          npm test
+
+      - name: Setup HashiCorp Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.5"
+
+      - name: Terraform Format & Syntax Check
+        working-directory: ./terraform
+        run: |
+          terraform fmt -check -recursive
+          terraform init -backend=false
+          terraform validate
+
+      - name: Setup Open Policy Agent (Conftest)
+        uses: instrumenta/conftest-action@master
+
+      - name: Evaluate Generated Remediation Plans Against OPA Guardrails
+        run: |
+          if compgen -G "terraform/remediations/*.opa.json" > /dev/null; then
+            conftest test terraform/remediations/*.opa.json -p policies/aci_guardrails.rego --namespace aci.guardrails
+          else
+            echo "No staged remediation JSON plans in terraform/remediations/ — skipping conftest file check."
+          fi

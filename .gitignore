@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Next.js
+.next/
+out/
+build/
+dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Process runtime & logs
+.app.pid
+.app.log
+logs/
+
+# Terraform state & provider cache
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+crash.log
+*.tfvars
+
+# OS / Editor
+.DS_Store
+*.swp
+.idea/
+.vscode/

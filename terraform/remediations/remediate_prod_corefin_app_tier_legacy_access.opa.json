@@ -1,0 +1,44 @@
+{
+  "metadata": {
+    "generator": "aci-groq-mcp-gitops",
+    "timestamp": "2026-11-23T16:52:41.289Z",
+    "tenant": "Prod-CoreFin",
+    "reason": "Remove cleartext Telnet/23, FTP/21, HTTP/80 from filter to meet CIS Benchmark 3.4.5 and limit lateral movement."
+  },
+  "vrf": {
+    "name": "Prod-CoreFin-VRF",
+    "pc_enf_pref": "enforced",
+    "vz_any_enabled": true
+  },
+  "contract": {
+    "name": "App-Tier-Legacy-Access",
+    "tenant": "Prod-CoreFin",
+    "scope": "context",
+    "consumer_epg": "Web-Frontend-EPG",
+    "provider_epg": "Payment-App-EPG",
+    "subjects": [
+      "Subj-App-Tier-Legacy-Access-Restricted"
+    ]
+  },
+  "filter": {
+    "name": "Flt-App-Tier-Legacy-Access-ZeroTrust",
+    "entries": [
+      {
+        "name": "https-443",
+        "ether_t": "ip",
+        "prot": "tcp",
+        "d_from_port": "443",
+        "d_to_port": "443",
+        "stateful": true
+      },
+      {
+        "name": "https-8443",
+        "ether_t": "ip",
+        "prot": "tcp",
+        "d_from_port": "8443",
+        "d_to_port": "8443",
+        "stateful": true
+      }
+    ]
+  }
+}
