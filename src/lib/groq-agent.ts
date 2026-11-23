@@ -31,6 +31,15 @@ const VALID_GROQ_MODELS = new Set([
   "openai/gpt-oss-20b",
 ]);
 
+/**
+ * Strips `<think>...</think>` reasoning blocks emitted by Qwen / reasoning models
+ * so the final chat response only displays clean architectural Markdown.
+ */
+function stripThinkingTags(text: string): string {
+  if (!text) return "";
+  return text.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+}
+
 class LlmConfigManager {
   private customApiKey: string | null = null;
   private customModel: string | null = null;
@@ -95,15 +104,16 @@ class LlmConfigManager {
       const res = await groq.chat.completions.create({
         model: settings.model,
         messages: [{ role: "user", content: "Respond with OK" }],
-        max_tokens: 8,
+        max_tokens: 16,
         temperature: 0,
       });
-      const reply = res.choices[0]?.message?.content?.trim() || "OK";
+      const reply =
+        stripThinkingTags(res.choices[0]?.message?.content || "") || "OK";
       return {
         ok: true,
         model: settings.model,
         keyPreview: settings.keyPreview,
-        message: `LLM API Key verified with model '${settings.model}' (response: "${reply}")`,
+        message: `LLM API Key verified with model '${settings.model}' (response: "${reply.slice(0, 24)}")`,
         latencyMs: Math.round(performance.now() - t0),
       };
     } catch (err: any) {
@@ -126,7 +136,7 @@ You audit live Cisco Application Centric Infrastructure (ACI) fabrics via Model 
 Core Operating Principles:
 1. Directly answer the engineer's question! If they ask "why does this need to be fixed?", "what is the blast radius?", "explain this violation", or "what is wrong with this contract?", explain the exact security risk, lateral movement blast radius, affected EPGs/VRFs, and CIS Cisco ACI Benchmark impact in clear, conversational detail.
 2. Call \`audit_tenant_contracts\`, \`get_fabric_health_and_faults\`, or \`inspect_epg_relationships\` whenever you need live fabric facts (DNs, fault codes, filter ports, EPG bindings).
-3. ONLY call \`generate_gitops_remediation\` when the user explicitly asks to fix, remediate, stage, or generate a Terraform plan.
+3. When the user asks to fix, remediate, stage, or generate a Terraform plan (e.g., "Remediate the vzAny contract...", "Fix the cleartext protocol violation...", "Remediate the unenforced VRF..."), you MUST call \`generate_gitops_remediation\` so the Terraform HCL and OPA Rego check are staged in the UI.
 4. Keep your Markdown formatting clean and well-structured using headings (###), bullet points (-), bold labels (**label**), and inline code (\`uni/tn-...\`).`;
 
 export async function runGroqMcpAgent(
@@ -187,25 +197,30 @@ export async function runGroqMcpAgent(
       { role: "user", content: userMessage },
     ];
 
-    // First Groq inference pass
-    const firstPass = await groq.chat.completions.create({
-      model,
-      messages,
-      tools: groqTools,
-      tool_choice: "auto",
-      temperature: 0.2,
-      max_tokens: 2048,
-    });
+    // Multi-round MCP tool-calling loop (up to 3 rounds so the agent can audit first and then remediate)
+    let finalReplyText = "";
+    for (let round = 0; round < 3; round++) {
+      const completion = await groq.chat.completions.create({
+        model,
+        messages,
+        tools: groqTools,
+        tool_choice: "auto",
+        temperature: 0.2,
+        max_tokens: 2048,
+      });
 
-    const assistantMsg = firstPass.choices[0]?.message;
-    if (!assistantMsg) {
-      throw new Error("LLM returned an empty response");
-    }
+      const assistantMsg = completion.choices[0]?.message;
+      if (!assistantMsg) {
+        throw new Error("LLM returned an empty response");
+      }
 
-    messages.push(assistantMsg);
+      messages.push(assistantMsg);
 
-    // Execute any requested MCP tool calls over the MCP client session
-    if (assistantMsg.tool_calls && assistantMsg.tool_calls.length > 0) {
+      if (!assistantMsg.tool_calls || assistantMsg.tool_calls.length === 0) {
+        finalReplyText = stripThinkingTags(assistantMsg.content || "");
+        break;
+      }
+
       for (const toolCall of assistantMsg.tool_calls) {
         const fnName = toolCall.function.name;
         let parsedArgs: Record<string, any> = {};
@@ -255,36 +270,30 @@ export async function runGroqMcpAgent(
           content: rawText,
         });
       }
+    }
 
-      // Second Groq pass to synthesize final architectural analysis
-      const secondPass = await groq.chat.completions.create({
+    // If all 3 rounds were tool calls without a final text synthesis, run one final synthesis pass
+    if (!finalReplyText) {
+      const synthesis = await groq.chat.completions.create({
         model,
         messages,
         temperature: 0.2,
         max_tokens: 2048,
       });
-
-      const finalReply =
-        secondPass.choices[0]?.message?.content ||
+      finalReplyText =
+        stripThinkingTags(synthesis.choices[0]?.message?.content || "") ||
         "Completed MCP tool execution.";
-
-      return {
-        reply: finalReply,
-        model,
-        toolTraces,
-        remediation: latestRemediation,
-      };
     }
 
     return {
-      reply: assistantMsg.content || "No action required.",
+      reply: finalReplyText,
       model,
       toolTraces,
       remediation: latestRemediation,
     };
   } catch (err: any) {
     return {
-      reply: `### LLM API Notice\n\nEncountered error while calling model \`${model}\`: \`${err?.message || String(err)}\`. You can update your **LLM API Key** in **Settings**.`,
+      reply: `### LLM API Notice\n\nEncountered error while calling model \`${model}\`: \`${err?.message || String(err)}\`. You can update your **LLM API Key** or switch models in **Settings**.`,
       model,
       toolTraces,
     };

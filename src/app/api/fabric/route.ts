@@ -10,24 +10,29 @@ export async function GET(req: NextRequest) {
   const modeParam = searchParams.get("mode") as "mock" | "live" | null;
   const profileParam = searchParams.get("profile") as FabricProfile | null;
 
+  // Only reconfigure profile if explicitly changing to mock or devnet
+  // (Do not wipe custom APIC credentials on a read-only GET poll)
   if (
-    profileParam === "mock" ||
-    profileParam === "devnet" ||
-    profileParam === "custom"
+    (profileParam === "mock" || profileParam === "devnet") &&
+    profileParam !== aciClient.getProfile()
   ) {
     aciClient.configureConnection({ profile: profileParam });
-  } else if (modeParam === "mock" || modeParam === "live") {
+  } else if (
+    (modeParam === "mock" || modeParam === "live") &&
+    modeParam !== aciClient.getMode()
+  ) {
     aciClient.setMode(modeParam);
   }
 
   const conn = aciClient.getConnectionInfo();
   const llmInfo = llmConfigManager.getEffectiveSettings();
 
-  const [tenantsRes, healthRes, auditRes, epgRes] = await Promise.all([
-    aciClient.getTenants(tenant),
-    aciClient.getFabricHealthAndFaults(tenant),
-    aciClient.auditTenantContracts(tenant),
-    aciClient.inspectEpgRelationships(tenant),
+  // Fetch tenants once and reuse the snapshot across health, audit, and EPG inspection
+  const tenantsRes = await aciClient.getTenants(tenant);
+  const [healthRes, auditRes, epgRes] = await Promise.all([
+    aciClient.getFabricHealthAndFaults(tenant, tenantsRes),
+    aciClient.auditTenantContracts(tenant, tenantsRes),
+    aciClient.inspectEpgRelationships(tenant, tenantsRes),
   ]);
 
   const remDir = path.resolve(process.cwd(), "terraform", "remediations");
@@ -131,11 +136,19 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const [tenantsRes, healthRes, auditRes] = await Promise.all([
-      aciClient.getTenants(),
-      aciClient.getFabricHealthAndFaults(),
-      aciClient.auditTenantContracts(),
+    const tenantsRes = await aciClient.getTenants();
+    const [healthRes, auditRes] = await Promise.all([
+      aciClient.getFabricHealthAndFaults(undefined, tenantsRes),
+      aciClient.auditTenantContracts(undefined, tenantsRes),
     ]);
+
+    const remDir = path.resolve(process.cwd(), "terraform", "remediations");
+    let savedRemediations: string[] = [];
+    if (fs.existsSync(remDir)) {
+      savedRemediations = fs
+        .readdirSync(remDir)
+        .filter((f) => f.endsWith(".tf"));
+    }
 
     return NextResponse.json({
       connection: conn,
@@ -153,6 +166,7 @@ export async function POST(req: NextRequest) {
       tenants: tenantsRes.tenants,
       health: healthRes,
       audit: auditRes,
+      savedRemediations,
     });
   } catch (err: any) {
     return NextResponse.json(

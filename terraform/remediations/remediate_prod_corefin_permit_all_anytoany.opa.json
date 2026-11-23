@@ -1,9 +1,9 @@
 {
   "metadata": {
     "generator": "aci-groq-mcp-gitops",
-    "timestamp": "2026-11-23T16:45:44.033Z",
+    "timestamp": "2026-11-23T18:41:41.819Z",
     "tenant": "Prod-CoreFin",
-    "reason": "Strip vzAny Any-to-Any binding from Prod-Payment-VRF and scope to stateful HTTPS/443"
+    "reason": "Remediate policy violation on Permit-All-AnyToAny with least-privilege micro-segmentation"
   },
   "vrf": {
     "name": "Prod-Payment-VRF",

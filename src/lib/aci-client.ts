@@ -28,6 +28,7 @@ export class AciClient {
   private profile: FabricProfile;
   private token: string | null = null;
   private tokenExpiry = 0;
+  private hasSeededLiveApic = false;
 
   constructor(overrideMode?: "mock" | "live") {
     const cfg = getConfig();
@@ -228,7 +229,10 @@ export class AciClient {
 
       this.token = token;
       this.tokenExpiry = Date.now() + 480_000;
-      await this.seedDemoTenantsToLiveApic(token);
+      if (!this.hasSeededLiveApic && this.profile === "devnet") {
+        this.hasSeededLiveApic = true;
+        await this.seedDemoTenantsToLiveApic(token);
+      }
       return { token, source: "live" };
     } catch (err) {
       // Automatic fallback to mock fabric if DevNet sandbox is unreachable
@@ -619,7 +623,10 @@ export class AciClient {
   /**
    * Returns fabric health summary and active APIC fault instances (faultInst)
    */
-  public async getFabricHealthAndFaults(tenantFilter?: string): Promise<{
+  public async getFabricHealthAndFaults(
+    tenantFilter?: string,
+    prefetched?: { tenants: AciTenantSnapshot[]; source: "live" | "mock" }
+  ): Promise<{
     overallHealth: number;
     totalFaults: number;
     criticalCount: number;
@@ -628,7 +635,8 @@ export class AciClient {
     faults: AciFault[];
     source: "live" | "mock";
   }> {
-    const { tenants, source } = await this.getTenants(tenantFilter);
+    const { tenants, source } =
+      prefetched || (await this.getTenants(tenantFilter));
     const faults = tenants.flatMap((t) => t.faults);
     const avgHealth =
       tenants.length > 0
@@ -660,7 +668,10 @@ export class AciClient {
    * 5. Missing contract subjects (empty contracts)
    * 6. Unenforced VRF policy control (`pcEnfPref = unenforced`)
    */
-  public async auditTenantContracts(tenantFilter?: string): Promise<{
+  public async auditTenantContracts(
+    tenantFilter?: string,
+    prefetched?: { tenants: AciTenantSnapshot[]; source: "live" | "mock" }
+  ): Promise<{
     violations: SecurityViolation[];
     summary: {
       totalViolations: number;
@@ -671,7 +682,8 @@ export class AciClient {
     };
     source: "live" | "mock";
   }> {
-    const { tenants, source } = await this.getTenants(tenantFilter);
+    const { tenants, source } =
+      prefetched || (await this.getTenants(tenantFilter));
     const violations: SecurityViolation[] = [];
 
     for (const tenant of tenants) {
@@ -937,8 +949,12 @@ export class AciClient {
   /**
    * Inspects EPG provider/consumer contract relationships for a tenant
    */
-  public async inspectEpgRelationships(tenantFilter?: string) {
-    const { tenants, source } = await this.getTenants(tenantFilter);
+  public async inspectEpgRelationships(
+    tenantFilter?: string,
+    prefetched?: { tenants: AciTenantSnapshot[]; source: "live" | "mock" }
+  ) {
+    const { tenants, source } =
+      prefetched || (await this.getTenants(tenantFilter));
     const relationships = tenants.flatMap((t) =>
       t.epgs.map((epg) => ({
         tenant: t.name,

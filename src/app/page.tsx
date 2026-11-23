@@ -195,6 +195,9 @@ export default function HomePage() {
   const [activeMcpTool, setActiveMcpTool] = useState<string | null>(null);
 
   const diffSectionRef = useRef<HTMLDivElement | null>(null);
+  const topologySectionRef = useRef<HTMLDivElement | null>(null);
+  const violationsSectionRef = useRef<HTMLDivElement | null>(null);
+  const chatScrollContainerRef = useRef<HTMLDivElement | null>(null);
   const aiCommandInputRef = useRef<HTMLInputElement | null>(null);
   const splitContainerRef = useRef<HTMLDivElement | null>(null);
 
@@ -213,8 +216,22 @@ export default function HomePage() {
       ],
     },
   ]);
+  const [heroPrompt, setHeroPrompt] = useState("");
   const [inputPrompt, setInputPrompt] = useState("");
   const [sendingChat, setSendingChat] = useState(false);
+
+  // Auto-scroll AI Security Co-Pilot stream to bottom when messages update
+  useEffect(() => {
+    if (chatScrollContainerRef.current) {
+      chatScrollContainerRef.current.scrollTop =
+        chatScrollContainerRef.current.scrollHeight;
+    }
+  }, [messages, sendingChat]);
+
+  const filteredViolations =
+    selectedTenant === "ALL"
+      ? violations
+      : violations.filter((v) => v.tenant === selectedTenant);
 
   const fetchFabricData = useCallback(
     async (profileOverride?: FabricProfile) => {
@@ -572,10 +589,11 @@ export default function HomePage() {
 
       {/* AI Conversation & Live MCP Tool Call Stream */}
       <div
+        ref={chatScrollContainerRef}
         style={{
           height: isMax ? "calc(100vh - 280px)" : `${chatHeight}px`,
         }}
-        className="p-3.5 space-y-3.5 overflow-y-auto bg-slate-50/70"
+        className="p-3.5 space-y-3.5 overflow-y-auto bg-slate-50/70 scroll-smooth"
       >
         {messages.map((msg, idx) => (
           <div
@@ -743,9 +761,23 @@ export default function HomePage() {
                   key={tab}
                   onClick={() => {
                     setApicTopNav(tab);
+                    if (maximizedSection !== "none" && tab !== "GitOps") {
+                      setMaximizedSection("none");
+                    }
                     if (tab === "AI Co-Pilot") {
                       aiCommandInputRef.current?.focus();
+                    } else if (tab === "Tenants" || tab === "Fabric") {
+                      setWorkpaneTab("topology");
+                      topologySectionRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                      });
+                    } else if (tab === "System") {
+                      setWorkpaneTab("faults");
+                      violationsSectionRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                      });
                     } else if (tab === "GitOps") {
+                      setWorkpaneTab("gitops");
                       diffSectionRef.current?.scrollIntoView({
                         behavior: "smooth",
                       });
@@ -960,7 +992,10 @@ export default function HomePage() {
                 <form
                   onSubmit={(e) => {
                     e.preventDefault();
-                    handleSendPrompt();
+                    if (!heroPrompt.trim()) return;
+                    const toSend = heroPrompt;
+                    setHeroPrompt("");
+                    handleSendPrompt(toSend);
                   }}
                   className="flex items-center gap-2 bg-white rounded-lg p-1.5 shadow-inner border-2 border-[#00bceb]"
                 >
@@ -968,14 +1003,14 @@ export default function HomePage() {
                   <input
                     ref={aiCommandInputRef}
                     type="text"
-                    value={inputPrompt}
-                    onChange={(e) => setInputPrompt(e.target.value)}
+                    value={heroPrompt}
+                    onChange={(e) => setHeroPrompt(e.target.value)}
                     placeholder="Ask AI Security Co-Pilot to audit a tenant, explain why a violation matters, or generate a Terraform fix..."
                     className="flex-1 bg-transparent text-xs sm:text-sm text-slate-900 placeholder-slate-400 focus:outline-none px-1"
                   />
                   <button
                     type="submit"
-                    disabled={sendingChat || !inputPrompt.trim()}
+                    disabled={sendingChat || !heroPrompt.trim()}
                     className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md bg-gradient-to-r from-[#049fd9] to-indigo-600 hover:from-[#0284c7] hover:to-indigo-700 disabled:opacity-40 text-xs font-bold text-white shadow transition shrink-0"
                   >
                     <Send className="w-3.5 h-3.5" />
@@ -1226,23 +1261,26 @@ export default function HomePage() {
           {/* RESIZABLE SPLIT CONTAINER: Center Topology/Violations <-> Right AI Security Co-Pilot & Diff */}
           <div
             ref={splitContainerRef}
+            style={
+              {
+                "--center-col": `${centerWidthPct}%`,
+                "--right-col": `${100 - centerWidthPct}%`,
+              } as React.CSSProperties
+            }
             className="flex-1 flex flex-col lg:flex-row min-w-0 gap-2 lg:gap-0"
           >
             {/* CENTER WORKPANE */}
-            <section
-              style={{
-                width:
-                  typeof window !== "undefined" && window.innerWidth < 1024
-                    ? "100%"
-                    : `${centerWidthPct}%`,
-              }}
-              className="min-w-0 flex flex-col gap-3.5 pr-0 lg:pr-1.5"
-            >
+            <section className="w-full lg:w-[var(--center-col)] min-w-0 flex flex-col gap-3.5 pr-0 lg:pr-1.5">
               {/* Cisco APIC Workpane Tab Bar */}
               <div className="rounded-lg bg-white border border-slate-200 shadow-sm px-3 py-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-1">
                   <button
-                    onClick={() => setWorkpaneTab("topology")}
+                    onClick={() => {
+                      setWorkpaneTab("topology");
+                      topologySectionRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                      });
+                    }}
                     className={`px-2.5 py-1 rounded text-xs font-semibold transition flex items-center gap-1.5 ${
                       workpaneTab === "topology"
                         ? "bg-[#049fd9] text-white"
@@ -1253,7 +1291,12 @@ export default function HomePage() {
                     Topology Graph
                   </button>
                   <button
-                    onClick={() => setWorkpaneTab("faults")}
+                    onClick={() => {
+                      setWorkpaneTab("faults");
+                      violationsSectionRef.current?.scrollIntoView({
+                        behavior: "smooth",
+                      });
+                    }}
                     className={`px-2.5 py-1 rounded text-xs font-semibold transition flex items-center gap-1.5 ${
                       workpaneTab === "faults"
                         ? "bg-[#049fd9] text-white"
@@ -1261,7 +1304,7 @@ export default function HomePage() {
                     }`}
                   >
                     <AlertTriangle className="w-3.5 h-3.5 text-[#f58220]" />
-                    Violations ({violations.length})
+                    Violations ({filteredViolations.length})
                   </button>
                   <button
                     onClick={() => {
@@ -1290,16 +1333,18 @@ export default function HomePage() {
               </div>
 
               {/* Apache ECharts Force-Directed Graph (with Maximize & Vertical Resize Splitter) */}
-              <AciTopologyChart
-                tenants={tenants}
-                violations={violations}
-                selectedTenant={selectedTenant}
-                onSelectNode={handleGraphNodeSelect}
-                isMaximized={false}
-                onToggleMaximize={() => toggleMaximize("topology")}
-                height={topologyHeight}
-                onHeightChange={setTopologyHeight}
-              />
+              <div ref={topologySectionRef}>
+                <AciTopologyChart
+                  tenants={tenants}
+                  violations={violations}
+                  selectedTenant={selectedTenant}
+                  onSelectNode={handleGraphNodeSelect}
+                  isMaximized={false}
+                  onToggleMaximize={() => toggleMaximize("topology")}
+                  height={topologyHeight}
+                  onHeightChange={setTopologyHeight}
+                />
+              </div>
 
               {/* 5-Option Interactive APIC Object Action Menu */}
               <AciObjectActionMenu
@@ -1313,11 +1358,15 @@ export default function HomePage() {
               />
 
               {/* APIC Operational Faults & Zero-Trust Policy Violations with AI Insights */}
-              <div className="rounded-lg bg-white border border-slate-200 shadow-sm overflow-hidden">
+              <div
+                ref={violationsSectionRef}
+                className="rounded-lg bg-white border border-slate-200 shadow-sm overflow-hidden"
+              >
                 <div className="px-3.5 py-2.5 bg-slate-100 border-b border-slate-200 flex items-center justify-between">
                   <h2 className="text-xs font-bold uppercase tracking-wider text-slate-800 flex items-center gap-2">
                     <AlertTriangle className="w-4 h-4 text-[#e2231a]" />
-                    AI-Detected Zero-Trust Policy Violations ({violations.length})
+                    AI-Detected Zero-Trust Policy Violations (
+                    {filteredViolations.length})
                   </h2>
                   <span className="text-[11px] text-[#0284c7] font-semibold">
                     Click any violation for APIC &amp; AI Actions
@@ -1325,7 +1374,7 @@ export default function HomePage() {
                 </div>
 
                 <div className="divide-y divide-slate-200 max-h-[340px] overflow-y-auto">
-                  {violations.map((v) => {
+                  {filteredViolations.map((v) => {
                     const asNode = violationToGraphNode(v);
                     const isSelected = actionTarget?.node.dn === v.dn;
                     return (
@@ -1418,15 +1467,7 @@ export default function HomePage() {
             </div>
 
             {/* RIGHT PANE: Prominent AI Security Co-Pilot & GitOps Diff Viewer */}
-            <section
-              style={{
-                width:
-                  typeof window !== "undefined" && window.innerWidth < 1024
-                    ? "100%"
-                    : `${100 - centerWidthPct}%`,
-              }}
-              className="min-w-0 flex flex-col gap-3.5 pl-0 lg:pl-1.5"
-            >
+            <section className="w-full lg:w-[var(--right-col)] min-w-0 flex flex-col gap-3.5 pl-0 lg:pl-1.5">
               {renderAiCoPilotSection(false)}
 
               <div ref={diffSectionRef}>

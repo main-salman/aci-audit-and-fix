@@ -41,10 +41,32 @@ export default function AciTopologyChart({
   const instanceRef = useRef<echarts.ECharts | null>(null);
   const [draggingHeight, setDraggingHeight] = useState(false);
 
+  // Cleanup ECharts instance on unmount & observe container resize events
+  useEffect(() => {
+    const el = chartRef.current;
+    if (!el) return;
+
+    const ro = new ResizeObserver(() => {
+      instanceRef.current?.resize();
+    });
+    ro.observe(el);
+
+    return () => {
+      ro.disconnect();
+      if (instanceRef.current) {
+        instanceRef.current.dispose();
+        instanceRef.current = null;
+      }
+    };
+  }, []);
+
   useEffect(() => {
     if (!chartRef.current) return;
 
-    if (!instanceRef.current) {
+    const existing = echarts.getInstanceByDom(chartRef.current);
+    if (existing) {
+      instanceRef.current = existing;
+    } else if (!instanceRef.current || instanceRef.current.isDisposed()) {
       instanceRef.current = echarts.init(chartRef.current, undefined, {
         renderer: "canvas",
       });
