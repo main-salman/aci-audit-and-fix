@@ -1,5 +1,7 @@
 # ChatOps to GitOps — Zero-Trust Cisco ACI Policy Auditing & Remediation with Groq + MCP + OPA
 
+![alt text](image.png)
+
 A production-grade network security & automation platform that connects **Cisco DevNet's Always-On ACI Sandbox** (plus a deterministic **Zero-Trust Demo Fabric**) to a **Model Context Protocol (MCP)** server (`@modelcontextprotocol/sdk`), powered by **Groq** tool-calling inference (`llama-3.3-70b-versatile`), an interactive **Apache ECharts Force-Directed Topology Graph**, and a **GitOps Guardrail layer** (**Terraform `CiscoDevNet/aci`** + **Open Policy Agent `.rego`** + **GitHub Actions**) so AI never blindly mutates production network fabrics.
 
 ---
